@@ -1,0 +1,13 @@
+# Godot
+.godot/
+*.translation
+# .NET
+.mono/
+data_*/
+mono_crash.*.json
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
