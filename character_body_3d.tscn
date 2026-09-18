@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://0w08k0tsasy2"]
+
+[ext_resource type="Script" uid="uid://dbke0phly7ldi" path="res://nave.gd" id="1_iwpo4"]
+
+[node name="CharacterBody3D" type="CharacterBody3D" unique_id=37818150]
+script = ExtResource("1_iwpo4")
+velocidad = 30.0
