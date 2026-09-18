@@ -1,47 +1,32 @@
-extends Area3D
-## Script para los proyectiles de láser
+extends Node3D
+## LÁSER de la nave. Lo crea nave.gd cada vez que disparas.
+## Se dibuja solo, viaja hacia el fondo y se borra a los pocos segundos.
 
-@export var velocidad: float = 30.0
-@export var tiempo_vida: float = 3.0
-var disparo_por: Node3D = null  # Para evitar autodestruirse al disparar
+var velocidad: float = 60.0    # qué tan rápido viaja
+var vida: float = 3.0          # segundos antes de desaparecer
+
 
 func _ready() -> void:
-	body_entered.connect(_on_body_entered)
-	
-	# Malla visual del láser (cilindro rojo brillante)
-	var mi := MeshInstance3D.new()
-	var c := CylinderMesh.new()
-	c.top_radius = 0.08
-	c.bottom_radius = 0.08
-	c.height = 0.8
-	mi.mesh = c
-	
+	add_to_group("laser")
+
+	var forma := BoxMesh.new()
+	forma.size = Vector3(0.08, 0.08, 1.2)
+
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.2, 0.2)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.1, 0.1)
-	mat.emission_energy_multiplier = 3.0
-	mi.material_override = mat
-	mi.rotation_degrees.x = 90.0
-	add_child(mi)
+	mat.emission = Color(1.0, 0.15, 0.15)
+	mat.emission_energy_multiplier = 4.0
 
-	# Colisión del láser
-	var col := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(0.2, 0.2, 0.8)
-	col.shape = shape
-	add_child(col)
+	var malla := MeshInstance3D.new()
+	malla.mesh = forma
+	malla.material_override = mat
+	add_child(malla)
 
-func _physics_process(delta: float) -> void:
-	# El láser avanza hacia adelante en su eje Z local (-Z)
-	position -= transform.basis.z * velocidad * delta
-	tiempo_vida -= delta
-	if tiempo_vida <= 0.0:
-		queue_free()
 
-func _on_body_entered(body: Node3D) -> void:
-	# Si choca con una nave y no es la nave que disparó el láser
-	if body.is_in_group("jugador") and body != disparo_por:
-		if body.has_method("recibir_dano"):
-			body.recibir_dano()
+func _process(delta: float) -> void:
+	global_position.z -= velocidad * delta
+	vida -= delta
+	if vida <= 0.0:
 		queue_free()

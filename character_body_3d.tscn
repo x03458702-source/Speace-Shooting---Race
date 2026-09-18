@@ -4,4 +4,3 @@
 
 [node name="CharacterBody3D" type="CharacterBody3D" unique_id=37818150]
 script = ExtResource("1_iwpo4")
-velocidad = 30.0
