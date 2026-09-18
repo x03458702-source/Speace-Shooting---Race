@@ -1,0 +1,201 @@
+Requerimientos funcionales.
+
+    ID	Requerimiento	Descripción
+    RF-01	Registro de usuario	El sistema debe permitir crear una cuenta mediante nickname, correo y contraseña.
+    RF-02	Inicio de sesión	El sistema debe permitir iniciar sesión con las credenciales registradas.
+    RF-03	Modo invitado	El sistema debe permitir jugar sin registro, sin guardar récords ni trofeos asociados a una cuenta.
+    RF-04	Selección de nivel	El jugador debe poder seleccionar los niveles disponibles.
+    RF-05	Control de nave	El sistema debe permitir controlar la nave en tiempo real dentro del circuito.
+    RF-06	Carrera	El sistema debe calcular progreso y posición de los competidores.
+    RF-07	Obstáculos	El circuito debe contener obstáculos que puedan afectar el avance de las naves.
+    RF-08	Cajas de comodines	El sistema debe generar cajas de comodines cada 15–20 segundos.
+    RF-09	Inventario de comodín	El jugador debe poder almacenar como máximo un comodín.
+    RF-10	Escudo	El sistema debe permitir activar un escudo que absorba el primer impacto durante un máximo de 8 segundos.
+    RF-11	Cañón láser	El sistema debe permitir realizar tres disparos frontales y aplicar sus efectos correspondientes.
+    RF-12	Bomba de área	El sistema debe permitir activar una bomba radial de 200 px que elimine obstáculos y empuje rivales.
+    RF-13	Aceite espacial	El sistema debe permitir colocar una trampa trasera que provoque giro y ralentización.
+    RF-14	Vidas y daño	El sistema debe gestionar impactos, daño y vidas restantes.
+    RF-15	Puntaje	El sistema debe otorgar puntos por acciones definidas y/o supervivencia.
+    RF-16	Finalización	El sistema debe finalizar la partida al cruzar la meta o perder todas las vidas.
+    RF-17	Estrellas	El sistema debe calcular las tres estrellas según las condiciones del nivel.
+    RF-18	Trofeos	El sistema debe otorgar el trofeo correspondiente al completar las tres estrellas.
+    RF-19	Ranking	El sistema debe registrar y mostrar el progreso de ranking de los jugadores registrados.
+    RF-20	Personalización	El sistema debe permitir utilizar skins cosméticas sin ventajas competitivas.
+    RF-21	HUD	El sistema debe mostrar vidas, puntaje, posición y comodín almacenado/activo.
+
+
+Historia del juego.
+
+    1.1 Contexto
+    En un futuro lejano, la humanidad ha desarrollado una tecnología capaz de construir circuitos de carreras alrededor de diferentes planetas del Sistema Solar.
+    Estas carreras, conocidas como Space Shooting-Race, comenzaron como una competición deportiva, pero rápidamente se convirtieron en uno de los eventos más importantes de la galaxia.
+    Las pistas no son circuitos normales: están llenas de obstáculos, rutas peligrosas y zonas de alta velocidad. Además, las naves cuentan con tecnología de combate no letal que permite utilizar armas y dispositivos especiales para superar a los competidores.
+    El objetivo no es destruir a los rivales, sino ser el primero en llegar a la meta.
+
+    1.2 El torneo
+    Cada planeta posee diferentes circuitos y niveles.
+    El jugador comienza su recorrido en el Sistema Solar, donde deberá demostrar sus habilidades en diferentes pistas.
+    Los primeros destinos serán:
+    -	Marte
+    -	Júpiter
+    Cada planeta tendrá 3 niveles, aumentando progresivamente la dificultad.
+    Esto mantiene la estructura de niveles que ya tienes planteada en la documentación original.
+
+    1.3 El jugador
+    El jugador es un piloto que participa por primera vez en el campeonato.
+    Su objetivo inicial es demostrar que puede competir contra los mejores pilotos del Sistema Solar.
+    A medida que completa carreras:
+
+    Carreras → Estrellas → Trofeos → Ranking
+    Las estrellas representan el desempeño del jugador en cada nivel.
+
+    1.4 La tecnología de los comodines
+    Durante años, los equipos desarrollaron dispositivos especiales para aumentar las posibilidades de supervivencia de las naves.
+    Estos dispositivos son conocidos como comodines.
+    Existen cuatro tecnologías principales:
+    -	Escudo Espacial
+    Tecnología defensiva capaz de absorber completamente el primer impacto recibido.
+    -	Cañón Láser
+    Un sistema de disparo frontal utilizado para destruir obstáculos o reducir temporalmente la velocidad de un rival.
+    -	Bomba de Área
+    Un dispositivo de energía que genera una onda expansiva capaz de limpiar obstáculos y desplazar naves cercanas.
+    -	Aceite Espacial
+    Una tecnología de trampa que puede dejarse sobre la pista para hacer perder el control a los rivales.
+    Esto permite que los comodines sean parte natural del universo del juego y no simplemente objetos colocados arbitrariamente.
+
+
+Jugabilidad especificada a detalle.
+
+    14. Comodines
+    Comodín	Prob.	Alcance	Uso	Efecto
+    Escudo Espacial	30%	Propio	8 s o 1 impacto	Absorbe 100% del daño del primer impacto.
+    Cañón Láser	30%	Frontal	3 disparos	Destruye obstáculos o reduce 40% la velocidad rival durante 2 s.
+    Bomba de Área	20%	Radial, 200 px	1 uso	Elimina obstáculos dentro del área y empuja rivales.
+    Aceite Espacial	20%	Trasero / pista	Persistente	Provoca giro y reduce 60% la velocidad durante 2.5 s.
+    Regla general: máximo 1 comodín almacenado por jugador. Las probabilidades se mantienen inicialmente constantes entre niveles.
+    15. Sistema de puntuación y progresión
+    •	Destruir obstáculos y afectar competidores puede generar puntos.
+    •	La supervivencia y el rendimiento durante la carrera pueden contribuir al puntaje.
+    •	Estrella 1: completar la meta.
+    •	Estrella 2: alcanzar el umbral de puntos configurado para el nivel.
+    •	Estrella 3: terminar en primer lugar o completar la carrera sin perder vidas.
+    •	Completar las tres estrellas permite obtener el trofeo del nivel.
+    •	Los puntos de trofeo alimentan el ranking nacional.
+
+    20. Naves espaciales
+
+    Cada nave debe tener una silueta fácilmente reconocible.
+
+    Características recomendadas
+    -	Modelo 3D de baja/media complejidad.
+    -	Entre 5.000 y 20.000 triángulos por nave como referencia inicial.
+    -	Motor trasero con emisión de energía.
+    -	Cabina o zona de piloto.
+    -	Alas o estabilizadores.
+    -	Elementos luminosos.
+    -	Punto de disparo frontal.
+    -	Punto de colocación de aceite trasero.
+
+¿Qué plataforma se va a usar?
+    PC y Dispositivo móvil (Celular)
+
+¿Qué lenguaje de programación van a usar?
+    C# 
+
+¿Qué motor de programación van a usar?
+    Unity
+
+El entorno especifico
+
+    21. Circuitos
+    Los circuitos deben ser uno de los elementos visuales más importantes.
+    Cada planeta tendrá una identidad propia.
+    Marte
+    Paleta:
+    -	Rojo oscuro.
+    -	Naranja.
+    -	Marrón.
+    -	Negro.
+    -	Azul/cian para tecnología.
+    Elementos:
+    -	Rocas.
+    -	Cráteres.
+    -	Montañas.
+    -	Polvo.
+    -	Estructuras futuristas.
+    -	Plataformas metálicas.
+    Júpiter
+    En lugar de colocar la pista directamente sobre el planeta, recomiendo crear un circuito espacial alrededor del planeta.
+    Elementos:
+    -	Júpiter visible en el fondo.
+    -	Grandes nubes.
+    -	Tormentas.
+    -	Asteroides.
+    -	Estaciones espaciales.
+    -	Plataformas futuristas.
+
+    22. Obstáculos 3D
+    Los obstáculos deben tener diferentes siluetas para que el jugador pueda identificarlos rápidamente.
+    Tipos
+    Asteroide
+    -	Roca irregular.
+    -	Rotación lenta.
+    -	Puede destruirse con Cañón/Bomba.
+    Barrera energética
+    -	Estructura tecnológica.
+    -	Emisión luminosa.
+    -	Puede bloquear parte del circuito.
+    Torre espacial
+    -	Elemento vertical.
+    -	Obliga al jugador a cambiar de trayectoria.
+    Campo de meteoritos
+    -	Múltiples objetos pequeños.
+    -	Requiere maniobras rápidas.
+
+    23. Efectos visuales
+    Los comodines necesitan una representación visual muy clara.
+    Escudo
+    Al activarse:
+    -	Esfera energética alrededor de la nave.
+    -	Transparencia.
+    -	Brillo.
+    -	Efecto de onda cuando recibe un impacto.
+    Cañón
+    Al disparar:
+    -	Proyectil energético.
+    -	Estela luminosa.
+    -	Destello en el punto de salida.
+    -	Explosión pequeña al impactar.
+    Bomba
+    Al activarse:
+    Nave → núcleo energético → onda expansiva → obstáculos destruidos
+    Debe sentirse como el comodín más espectacular visualmente.
+    Aceite
+    Debe verse sobre la pista como una superficie energética/viscosa
+    Cuando un rival lo pisa:
+    -	Efecto de deslizamiento.
+    -	Giro de la nave.
+    -	Pequeña animación de pérdida de control.
+    25. Cámara
+    Cámara en tercera persona.
+                META
+                ↓
+                🚀
+                / 
+                /
+        📷 Cámara
+    La cámara debe:
+    -	Seguir suavemente la nave.
+    -	Mantener una distancia constante.
+    -	Mirar hacia delante.
+    -	Inclinarse ligeramente durante los giros.
+    -	Aumentar ligeramente el campo de visión a altas velocidades.
+    FOV recomendado
+    60–75°
+    Como punto inicial
+    -	70° No newline at end of file
+
+
+
+
+    
