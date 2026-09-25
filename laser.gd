@@ -1,47 +1,58 @@
 extends Node3D
-## LÁSER de la nave. Lo crea nave.gd cada vez que disparas.
-## Núcleo blanco + halo rojo, viaja al frente de la nave y al impactar
-## (capa 3 = futuros obstáculos) deja un destello y se destruye.
+## LÁSER de combate de la nave (Sección 14 y 23)
+## Núcleo brillante + halo luminoso. Puede ser un láser estándar o un disparo
+## potenciado de Cañón Láser (3 cargas, ralentiza 40% durante 2 s y destruye obstáculos).
 
-var velocidad: float = 380.0   # casi instantáneo: zap recto que no alcanza a curvarse
-var vida: float = 0.25         # chispazo corto (~95 m): no dibuja la curva en el aire
-var dano: int = 1              # daño por impacto (lo usará el sistema de combate)
-
+var velocidad: float = 380.0
+var vida: float = 0.35
+var dano: int = 1
+var es_comodin_canon: bool = false
+var es_del_jugador: bool = true
+var tirador: Node = null
 
 func _ready() -> void:
 	add_to_group("laser")
 	_construir()
 
-	# Detector de impactos. Máscara 4 (capa 3): IGNORA la propia nave (capa 1)
-	# y las puertas (áreas en capa 1). Los futuros obstáculos irán en capa 3.
 	var area := Area3D.new()
 	area.collision_layer = 0
-	area.collision_mask = 4
+	# Máscara: Obstáculos (capa 3 = 4). Si es del jugador, detecta rivales (capa 2 = 2).
+	# Si es de la IA, detecta al jugador (capa 1 = 1).
+	var mascara: int = 4
+	if es_del_jugador:
+		mascara |= 2
+	else:
+		mascara |= 1
+	area.collision_mask = mascara
+
 	var col := CollisionShape3D.new()
 	var esfera := SphereShape3D.new()
-	esfera.radius = 0.6
+	esfera.radius = 0.9 if es_comodin_canon else 0.6
 	col.shape = esfera
 	area.add_child(col)
 	add_child(area)
-	area.body_entered.connect(_al_impactar.bind(area))
-	area.area_entered.connect(_al_impactar.bind(area))
 
+	area.body_entered.connect(_al_impactar)
+	area.area_entered.connect(func(a): _al_impactar(a))
 
 func _construir() -> void:
+	var color_nucleo := Color(1.0, 1.0, 1.0)
+	var color_halo := Color(1.0, 0.25, 0.1) if es_comodin_canon else Color(1.0, 0.15, 0.15)
+	var escala_visual: float = 1.6 if es_comodin_canon else 1.0
+
 	var nucleo := MeshInstance3D.new()
 	var bn := BoxMesh.new()
-	bn.size = Vector3(0.14, 0.14, 1.6)
+	bn.size = Vector3(0.14, 0.14, 1.6) * escala_visual
 	nucleo.mesh = bn
-	nucleo.material_override = _brillo(Color(1.0, 1.0, 1.0), 6.0)
+	nucleo.material_override = _brillo(color_nucleo, 7.0 if es_comodin_canon else 6.0)
 	add_child(nucleo)
 
 	var halo := MeshInstance3D.new()
 	var bh := BoxMesh.new()
-	bh.size = Vector3(0.28, 0.28, 1.1)
+	bh.size = Vector3(0.32, 0.32, 1.2) * escala_visual
 	halo.mesh = bh
-	halo.material_override = _brillo(Color(1.0, 0.15, 0.15), 4.0)
+	halo.material_override = _brillo(color_halo, 5.0 if es_comodin_canon else 4.0)
 	add_child(halo)
-
 
 func _brillo(color: Color, energia: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -52,35 +63,53 @@ func _brillo(color: Color, energia: float) -> StandardMaterial3D:
 	m.emission_energy_multiplier = energia
 	return m
 
-
 func _process(delta: float) -> void:
 	global_position += -global_transform.basis.z * velocidad * delta
 	vida -= delta
-	# Solución a los rayos que se salen del mapa: se apagan solos al
-	# expirar, al tocar el suelo (con destello) o al cruzar los límites.
-	if vida <= 0.0 or absf(global_position.x) > 700.0 or absf(global_position.z) > 950.0 or global_position.y > 80.0:
+	if vida <= 0.0 or absf(global_position.x) > 850.0 or absf(global_position.z) > 1200.0 or global_position.y > 80.0:
 		queue_free()
 		return
 	if global_position.y < 0.8:
 		_destello(global_position, Color(0.6, 0.3, 0.15))
 		queue_free()
 
+func _al_impactar(objeto: Node) -> void:
+	if objeto == null or objeto == tirador:
+		return
 
-func _al_impactar(_nodo: Variant, area: Area3D) -> void:
-	_destello(global_position, Color(1.0, 0.4, 0.2))
-	area.set_deferred("monitoring", false)
+	var objetivo: Node = objeto
+	if objeto is Area3D and objeto.get_parent() != null and not (objeto is ObstaculoAsteroide):
+		objetivo = objeto.get_parent()
+
+	if objetivo == tirador:
+		return
+
+	# Impacto contra asteroide
+	if objetivo.has_method("recibir_dano_laser"):
+		objetivo.recibir_dano_laser(2 if es_comodin_canon else 1, es_del_jugador)
+
+	# Impacto contra nave rival o jugador
+	if objetivo.has_method("recibir_impacto_laser"):
+		objetivo.recibir_impacto_laser(es_comodin_canon, es_del_jugador)
+		if es_del_jugador and objetivo.is_in_group("rivales"):
+			var rm := get_tree().root.find_child("RaceManager", true, false)
+			if rm != null and rm.has_method("sumar_puntos_jugador"):
+				rm.sumar_puntos_jugador(150)
+
+	_destello(global_position, Color(1.0, 0.45, 0.1) if es_comodin_canon else Color(1.0, 0.2, 0.2))
 	queue_free()
-
 
 func _destello(pos: Vector3, color: Color) -> void:
 	var chispa := MeshInstance3D.new()
 	var sm := SphereMesh.new()
-	sm.radius = 0.5
-	sm.height = 1.0
+	sm.radius = 0.6 if es_comodin_canon else 0.4
+	sm.height = 1.2 if es_comodin_canon else 0.8
 	chispa.mesh = sm
-	chispa.material_override = _brillo(color, 5.0)
-	get_parent().add_child(chispa)
-	chispa.global_position = pos
-	var tw := chispa.create_tween()
-	tw.tween_property(chispa, "scale", Vector3.ONE * 3.0, 0.15)
-	tw.tween_callback(chispa.queue_free)
+	chispa.material_override = _brillo(color, 6.0)
+	var padre := get_parent()
+	if padre != null:
+		padre.add_child(chispa)
+		chispa.global_position = pos
+		var tw := chispa.create_tween()
+		tw.tween_property(chispa, "scale", Vector3.ONE * 3.5, 0.15)
+		tw.tween_callback(chispa.queue_free)

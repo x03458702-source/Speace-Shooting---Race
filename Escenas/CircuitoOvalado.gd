@@ -28,6 +28,9 @@ var _meta: StandardMaterial3D
 var _roca: StandardMaterial3D
 var _roca2: StandardMaterial3D
 var _metal: StandardMaterial3D
+var _rivales: Array[Node] = []
+var _race_manager: SistemaCarrera
+var _hud: HUDJuego
 
 
 func _ready() -> void:
@@ -38,15 +41,163 @@ func _ready() -> void:
 	_construir_pista()
 	_construir_puertas()
 	_construir_decorado()
+	_construir_cajas_comodines()
+	_construir_obstaculos()
+	_construir_rivales_ia()
 	_configurar_nave()
+	_configurar_sistemas_carrera()
 
 
 func _configurar_nave() -> void:
 	var nave := get_node_or_null("Nave")
 	if nave != null and nave.has_method("cargar_circuito"):
 		nave.cargar_circuito(_pts, _anchos)
+		if nave.has_method("set"):
+			nave.set("_lat", -6.0)
 	else:
 		push_warning("CircuitoOvalado: no se encontró el nodo 'Nave' con modo circuito.")
+
+
+# ---------------------------------------------------------------
+# COMODINES, OBSTÁCULOS E IA DE RIVALES
+# ---------------------------------------------------------------
+func _construir_cajas_comodines() -> void:
+	var nodo_cajas := Node3D.new()
+	nodo_cajas.name = "CajasComodines"
+	add_child(nodo_cajas)
+
+	# 4 estaciones de cajas a lo largo del circuito (RF-08)
+	var fracciones := [0.15, 0.38, 0.62, 0.85]
+	for frac in fracciones:
+		var dist: float = _total * frac
+		var m := _muestrear(dist)
+		var centro: Vector3 = m[0]
+		var t: Vector3 = m[1]
+		var w := float(m[2])
+		var right := Vector3(-t.z, 0.0, t.x)
+
+		# 3 cajas en fila cruzando el ancho de la pista
+		for offset in [-7.0, 0.0, 7.0]:
+			if abs(offset) < w * 0.42:
+				var caja := CajaComodin.new()
+				nodo_cajas.add_child(caja)
+				caja.global_position = centro + right * offset + Vector3(0, 0.2, 0)
+				caja.rotation.y = atan2(-t.x, -t.z)
+
+
+func _construir_obstaculos() -> void:
+	var nodo_obs := Node3D.new()
+	nodo_obs.name = "Obstaculos"
+	add_child(nodo_obs)
+
+	# 1. Asteroides destructibles en rectas y antes de curvas (Sección 22)
+	var distancias_asteroides := [
+		[220.0, -5.0], [420.0, 6.0], [600.0, 0.0],
+		[880.0, -7.0], [1150.0, 6.0], [1380.0, -4.0],
+		[1580.0, 5.0], [1850.0, -6.0], [2100.0, 4.0],
+		[2300.0, -5.0]
+	]
+
+	for dato in distancias_asteroides:
+		var s: float = fposmod(float(dato[0]), _total)
+		var m := _muestrear(s)
+		var centro: Vector3 = m[0]
+		var t: Vector3 = m[1]
+		var w := float(m[2])
+		var right := Vector3(-t.z, 0.0, t.x)
+		var lat := clampf(float(dato[1]), -w * 0.38, w * 0.38)
+
+		var asteroide := ObstaculoAsteroide.new()
+		asteroide.add_to_group("obstaculos")
+		nodo_obs.add_child(asteroide)
+		asteroide.global_position = centro + right * lat + Vector3(0, 2.4, 0)
+
+	# 2. Barreras energéticas en zonas estratégicas
+	var barreras_datos := [
+		[_total * 0.28, 7.0, 14.0],   # Bloquea carril derecho
+		[_total * 0.72, -7.0, 14.0]   # Bloquea carril izquierdo
+	]
+
+	for b_dato in barreras_datos:
+		var s: float = float(b_dato[0])
+		var m := _muestrear(s)
+		var centro: Vector3 = m[0]
+		var t: Vector3 = m[1]
+		var right := Vector3(-t.z, 0.0, t.x)
+
+		var barrera := BarreraEnergetica.new()
+		barrera.ancho = float(b_dato[2])
+		barrera.add_to_group("obstaculos")
+		nodo_obs.add_child(barrera)
+		barrera.global_position = centro + right * float(b_dato[1])
+		barrera.rotation.y = atan2(-t.x, -t.z)
+
+
+func _construir_rivales_ia() -> void:
+	_rivales.clear()
+	var nodo_rivales := Node3D.new()
+	nodo_rivales.name = "RivalesIA"
+	add_child(nodo_rivales)
+
+	var configs_rivales := [
+		{
+			"nombre": "ARES",
+			"primario": Color(0.85, 0.12, 0.15),
+			"secundario": Color(0.95, 0.75, 0.1),
+			"energia": Color(1.0, 0.35, 0.1),
+			"vel": 28.2,
+			"s_offset": -8.0,
+			"lat": 6.0
+		},
+		{
+			"nombre": "VIPER",
+			"primario": Color(0.1, 0.65, 0.25),
+			"secundario": Color(0.15, 0.18, 0.22),
+			"energia": Color(0.2, 0.95, 0.5),
+			"vel": 27.6,
+			"s_offset": -16.0,
+			"lat": -6.0
+		},
+		{
+			"nombre": "NOVA",
+			"primario": Color(0.48, 0.12, 0.75),
+			"secundario": Color(0.8, 0.85, 0.9),
+			"energia": Color(0.75, 0.2, 1.0),
+			"vel": 27.0,
+			"s_offset": -24.0,
+			"lat": 6.0
+		}
+	]
+
+	for cfg in configs_rivales:
+		var rival := NaveRivalIA.new()
+		rival.name = "Rival_" + String(cfg["nombre"])
+		rival.nombre_piloto = String(cfg["nombre"])
+		rival.color_primario = cfg["primario"]
+		rival.color_secundario = cfg["secundario"]
+		rival.color_energia = cfg["energia"]
+		rival.avance_base = float(cfg["vel"])
+		rival.total_vueltas_carrera = 3
+		nodo_rivales.add_child(rival)
+		rival.cargar_circuito(_pts, _anchos, float(cfg["s_offset"]), float(cfg["lat"]))
+		_rivales.append(rival)
+
+
+func _configurar_sistemas_carrera() -> void:
+	var nave := get_node_or_null("Nave")
+	if nave == null:
+		return
+
+	_race_manager = SistemaCarrera.new()
+	_race_manager.total_vueltas = 3
+	add_child(_race_manager)
+
+	_hud = HUDJuego.new()
+	add_child(_hud)
+
+	_race_manager.configurar_participantes(nave, _rivales)
+	_hud.vincular(nave, _race_manager)
+
 
 
 # ---------------------------------------------------------------

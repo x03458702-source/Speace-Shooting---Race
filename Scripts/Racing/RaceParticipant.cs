@@ -30,11 +30,27 @@ public partial class RaceParticipant : Node
 
     public void RegisterCheckpointEntry(Checkpoint cp)
     {
-        // Lógica cuando atraviesa un checkpoint
+        if (Finished || _raceManager == null) return;
+
+        if (cp.Index == NextCheckpointIndex)
+        {
+            NextCheckpointIndex = (NextCheckpointIndex + 1) % _raceManager.CheckpointCount;
+            ProgressScore = LapsCompleted * 1000f + NextCheckpointIndex * 100f;
+        }
     }
 
     public void RegisterFinishLineEntry()
     {
-        // Lógica cuando cruza la línea de meta
+        if (Finished || _raceManager == null) return;
+
+        LapsCompleted++;
+        EmitSignal(SignalName.LapCompleted, LapsCompleted, _raceManager.TotalLaps);
+
+        if (LapsCompleted >= _raceManager.TotalLaps)
+        {
+            Finished = true;
+            FinishTime = (float)_raceManager.RaceElapsedTime;
+            EmitSignal(SignalName.RaceFinished);
+        }
     }
 }
