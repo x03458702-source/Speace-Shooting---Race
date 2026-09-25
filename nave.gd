@@ -1,67 +1,98 @@
 extends CharacterBody3D
-## NAVE ESPACIAL 3D (Godot 4)
-## Este script ARMA la nave completa con piezas (cajas, cilindros, toros),
-## le pone colores y materiales, la mueve con el teclado y dispara lásers.
-##
-## USO: ponle este script a un nodo CharacterBody3D vacío (sin hijos).
-## Movimiento: WASD o flechas | Disparo: barra espaciadora o clic izquierdo
+## NAVE ESPACIAL 3D (Godot 4) - Space Shooting-Race
+## Modelo 3D procedural sci-fi, seguimiento de circuito, inventario de comodines (máx 1),
+## sistema de 3 vidas, escudo energético, disparos de cañón y efectos de combate.
+
+signal vidas_cambiadas(vidas_actuales: int, vidas_max: int)
+signal comodin_cambiado(tipo_comodin: int, cargas: int)
+signal nave_destruida()
+signal vuelta_completada(vuelta: int, total_vueltas: int)
 
 # ---------------------------------------------------------------
-# AJUSTES (los puedes cambiar desde el Inspector sin tocar el código)
+# AJUSTES
 # ---------------------------------------------------------------
 @export_group("Movimiento")
-@export var velocidad: float = 5.0       # movimientos A/D/W/S lentos y pesados
-@export var suavidad: float = 8.0        # más alto = frena y arranca más brusco
-@export var limite_x: float = 7.0        # hasta dónde llega a los lados
-@export var limite_y: float = 4.0        # hasta dónde llega arriba y abajo
-@export var inclinacion: float = 0.5     # cuánto se ladea al moverse
+@export var velocidad: float = 5.0
+@export var suavidad: float = 8.0
+@export var limite_x: float = 7.0
+@export var limite_y: float = 4.0
+@export var inclinacion: float = 0.5
 
 @export_group("Carrera")
-@export var auto_avanzar: bool = true    # si avanza sola hacia -Z (modo carrera)
-@export var avance: float = 28.0         # velocidad de avance en pista
-@export var limite_z_min: float = -960.0 # meta: al llegar, da la vuelta (bucle sin fin)
+@export var auto_avanzar: bool = true
+@export var avance: float = 28.0
+@export var limite_z_min: float = -960.0
 @export var limite_z_max: float = 960.0
-@export var vueltas: int = 0             # contador de vueltas completadas
+@export var vueltas: int = 0
+@export var total_vueltas_carrera: int = 3
 
 @export_group("Circuito en V")
-@export var modo_circuito: bool = false  # true = sigue el trazado en vez de ir recto
-@export var altura_circuito: float = 2.6 # altura de vuelo sobre la pista
-@export var medio_ancho: float = 20.0    # apertura lateral máxima (el circuito la limita)
+@export var modo_circuito: bool = false
+@export var altura_circuito: float = 2.6
+@export var medio_ancho: float = 20.0
+
+@export_group("Combate y Salud")
+@export var max_vidas: int = 3
+@export var tiempo_invulnerabilidad: float = 1.5
 
 @export_group("Disparo")
-@export var cadencia: float = 0.18       # zaps separados: se leen rectos, no en manguera
+@export var cadencia: float = 0.18
 
-@export_group("Para probar rápido")
-@export var crear_camara: bool = true    # desactívalo si ya tienes tu cámara
-@export var crear_luz: bool = true       # desactívalo si ya tienes tu luz
+@export_group("Cámara y Luz")
+@export var crear_camara: bool = true
+@export var crear_luz: bool = true
 
 # ---------------------------------------------------------------
-# VARIABLES INTERNAS
+# VARIABLES DE ESTADO Y COMBATE
 # ---------------------------------------------------------------
-var modelo: Node3D                        # aquí cuelgan todas las piezas visibles
-var llamas: Array[Node3D] = []            # las llamas de los motores
+var vidas: int = 3
+var inmune: bool = false
+var tiempo_inmune: float = 0.0
+var control_habilitado: bool = true
+var comodin_almacenado: int = PowerUpTypes.Type.NONE
+var cargas_canon: int = 0
+var escudo_activo: bool = false
+var tiempo_escudo: float = 0.0
+var progreso_total: float = 0.0
+
+# Efectos de estado
+var _ralentizado_tiempo: float = 0.0
+var _ralentizado_factor: float = 1.0
+var _giro_aceite_tiempo: float = 0.0
+var _giro_aceite_acum: float = 0.0
+var _empuje_lateral: float = 0.0
+
+# Visuales y circuito
+var modelo: Node3D
+var llamas: Array[Node3D] = []
+var _malla_escudo: MeshInstance3D
 var _tiempo_disparo: float = 0.0
-var _lat: float = 0.0                     # desplazamiento lateral sobre la pista
-var _alt: float = 0.0                     # altura extra (W/S, suavizada)
-var _bank_extra: float = 0.0              # ladeo extra en curvas (modo circuito)
-var _cam: Camera3D                        # cámara perseguidora (modo circuito)
-var _cam_yaw: float = 0.0                 # giro propio de la cámara (con retardo)
-var _pp := PackedVector3Array()           # línea central del circuito
-var _pw := PackedFloat32Array()           # ancho en cada punto
-var _pc := PackedFloat32Array()           # distancias acumuladas
-var _ptotal := 0.0                        # longitud de la vuelta
-var _s := 0.0                             # avance sobre el trazado
-
+var _tiempo_uso_comodin: float = 0.0
+var _lat: float = 0.0
+var _alt: float = 0.0
+var _bank_extra: float = 0.0
+var _cam: Camera3D
+var _cam_yaw: float = 0.0
+var _pp := PackedVector3Array()
+var _pw := PackedFloat32Array()
+var _pc := PackedFloat32Array()
+var _ptotal := 0.0
+var _s := 0.0
 
 func _ready() -> void:
-	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING  # sin gravedad, es el espacio
+	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+	collision_layer = 1       # Capa 1: Jugador
+	collision_mask = 4 | 8 | 16
 	add_to_group("jugador")
+
+	vidas = max_vidas
 
 	modelo = Node3D.new()
 	modelo.name = "Modelo"
 	add_child(modelo)
 
 	_construir_nave()
+	_construir_escudo()
 	_crear_colision()
 
 	if crear_luz:
@@ -72,7 +103,6 @@ func _ready() -> void:
 
 	if crear_camara:
 		if modo_circuito:
-			# Cámara libre con retardo (no va soldada: se queda atrás en las curvas)
 			_cam = Camera3D.new()
 			_cam.top_level = true
 			add_child(_cam)
@@ -93,8 +123,9 @@ func _ready() -> void:
 		_snap_circuito()
 		_actualizar_camara(1.0 / 60.0, true)
 
+	emit_signal("vidas_cambiadas", vidas, max_vidas)
+	emit_signal("comodin_cambiado", comodin_almacenado, cargas_canon)
 
-## El circuito le pasa su trazado (puntos + anchos). Una sola fuente de verdad.
 func cargar_circuito(puntos: PackedVector3Array, anchos: PackedFloat32Array) -> void:
 	_pp = puntos
 	_pw = anchos
@@ -115,8 +146,6 @@ func cargar_circuito(puntos: PackedVector3Array, anchos: PackedFloat32Array) -> 
 		_snap_circuito()
 		_actualizar_camara(1.0 / 60.0, true)
 
-
-## Punto de la línea central a distancia s: [pos, tangente, ancho].
 func _punto_en(s: float) -> Array:
 	var n := _pp.size()
 	if n == 0 or _ptotal <= 0.0:
@@ -139,20 +168,53 @@ func _punto_en(s: float) -> Array:
 		tan = tan.normalized()
 	return [p0.lerp(p1, f), tan, lerpf(_pw[i], _pw[(i + 1) % n], f)]
 
-
-## Coloca la nave sobre el trazado (sin física, cinemático).
 func _snap_circuito() -> void:
 	var m := _punto_en(_s)
 	var centro: Vector3 = m[0]
 	var t: Vector3 = m[1]
-	global_position = centro + Vector3(0.0, altura_circuito, 0.0)
+	var right := Vector3(-t.z, 0.0, t.x)
+	global_position = centro + right * _lat + Vector3(0.0, altura_circuito, 0.0)
 	rotation.y = atan2(-t.x, -t.z)
 	rotation.x = 0.0
 	velocity = t * avance
 
+func _physics_process(delta: float) -> void:
+	_actualizar_efectos_temporales(delta)
 
-## Avance sobre el trazado en V: A/D te abren a los lados, W/S suben/bajan.
-## En las V angostas el lateral se limita solo al ancho de la curva.
+	var dir := _leer_direccion() if control_habilitado else Vector2.ZERO
+
+	if modo_circuito:
+		_proceso_circuito(delta, dir)
+	else:
+		_movimiento_recto(delta, dir)
+
+	# Inclinación al doblar + giro si pisó aceite
+	var t := 1.0 - exp(-6.0 * delta)
+	modelo.rotation.z = lerpf(modelo.rotation.z, -dir.x * inclinacion + _bank_extra, t)
+	modelo.rotation.x = lerpf(modelo.rotation.x, dir.y * inclinacion * 0.5, t)
+	if _giro_aceite_tiempo > 0.0:
+		modelo.rotation.y = _giro_aceite_acum
+
+	# Llamas de los motores
+	var fuerza := 1.0 + velocity.length() * 0.03
+	for llama in llamas:
+		llama.scale.z = fuerza * randf_range(0.8, 1.2)
+
+	# Entrada de disparos
+	_tiempo_disparo -= delta
+	_tiempo_uso_comodin -= delta
+
+	if control_habilitado:
+		# Disparo normal (Láser primario: Clic izq / J / Ctrl)
+		if (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(KEY_J) or Input.is_physical_key_pressed(KEY_CTRL)) and _tiempo_disparo <= 0.0:
+			_disparar_laser_normal()
+			_tiempo_disparo = cadencia
+
+		# Activar comodín (Espacio / Clic der / E)
+		if (Input.is_physical_key_pressed(KEY_SPACE) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_physical_key_pressed(KEY_E)) and _tiempo_uso_comodin <= 0.0:
+			usar_comodin()
+			_tiempo_uso_comodin = 0.25
+
 func _proceso_circuito(delta: float, dir: Vector2) -> void:
 	var adelante := _punto_en(_s + 40.0)[1] as Vector3
 	var m := _punto_en(_s)
@@ -160,23 +222,34 @@ func _proceso_circuito(delta: float, dir: Vector2) -> void:
 	var t: Vector3 = m[1]
 	var w := float(m[2])
 	var giro := t.angle_to(adelante) / PI
-	var v := avance * (1.0 - 0.25 * clampf(giro * 2.0, 0.0, 1.0)) if auto_avanzar else 0.0
+	
+	var v_base := avance * (1.0 - 0.25 * clampf(giro * 2.0, 0.0, 1.0))
+	var v := v_base * _ralentizado_factor if (auto_avanzar and control_habilitado) else 0.0
 	_s += v * delta
+	
+	progreso_total = vueltas * _ptotal + _s
+
 	if _s >= _ptotal and _ptotal > 0.0:
 		_s -= _ptotal
 		vueltas += 1
-		print("¡Vuelta ", vueltas, " completada!")
+		emit_signal("vuelta_completada", vueltas, total_vueltas_carrera)
+
 	m = _punto_en(_s)
 	centro = m[0]
 	t = m[1]
 	w = float(m[2])
 	var right := Vector3(-t.z, 0.0, t.x)
 	var mitad := minf(medio_ancho, maxf(w * 0.5 - 2.0, 4.0))
-	_lat = lerpf(_lat, dir.x * medio_ancho, 1.0 - exp(-1.6 * delta))
+	
+	# Desplazamiento lateral con control + empuje de bomba
+	_lat = lerpf(_lat, dir.x * medio_ancho + _empuje_lateral, 1.0 - exp(-1.8 * delta))
 	_lat = clampf(_lat, -mitad, mitad)
+	_empuje_lateral = lerpf(_empuje_lateral, 0.0, 1.0 - exp(-3.0 * delta))
+	
 	_alt = lerpf(_alt, dir.y * 10.0, 1.0 - exp(-1.2 * delta))
 	var cy := clampf(altura_circuito + _alt, 1.6, 24.0)
 	global_position = centro + right * _lat + Vector3(0.0, cy, 0.0)
+
 	var yaw_obj := atan2(-t.x, -t.z)
 	var yaw_rate := angle_difference(rotation.y, yaw_obj) / maxf(delta, 0.0001)
 	rotation.y = lerp_angle(rotation.y, yaw_obj, 1.0 - exp(-5.0 * delta))
@@ -185,8 +258,21 @@ func _proceso_circuito(delta: float, dir: Vector2) -> void:
 	velocity = t * v
 	_actualizar_camara(delta, false)
 
+func _movimiento_recto(delta: float, dir: Vector2) -> void:
+	_bank_extra = 0.0
+	var vz := -avance * _ralentizado_factor if (auto_avanzar and control_habilitado) else 0.0
+	var objetivo := Vector3(dir.x * velocidad, dir.y * velocidad, vz)
+	velocity = velocity.lerp(objetivo, 1.0 - exp(-suavidad * delta))
+	move_and_slide()
+	position.x = clampf(position.x, -limite_x, limite_x)
+	position.y = clampf(position.y, -limite_y, limite_y)
+	if position.z <= limite_z_min:
+		position.z = limite_z_max
+		vueltas += 1
+		emit_signal("vuelta_completada", vueltas, total_vueltas_carrera)
+	else:
+		position.z = clampf(position.z, limite_z_min, limite_z_max)
 
-## Cámara perseguidora: gira con retardo tras la nave y abre el FOV con la velocidad.
 func _actualizar_camara(delta: float, instantaneo: bool) -> void:
 	if _cam == null or not is_instance_valid(_cam):
 		return
@@ -211,51 +297,6 @@ func _actualizar_camara(delta: float, instantaneo: bool) -> void:
 	var fov_obj := 68.0 + 5.0 * clampf(velocity.length() / maxf(avance, 1.0), 0.0, 1.2)
 	_cam.fov = fov_obj if instantaneo else lerpf(_cam.fov, fov_obj, 1.0 - exp(-3.0 * delta))
 
-
-func _physics_process(delta: float) -> void:
-	var dir := _leer_direccion()
-
-	if modo_circuito:
-		_proceso_circuito(delta, dir)
-	else:
-		_movimiento_recto(delta, dir)
-
-	# --- La nave se ladea un poquito al moverse (más el banqueo en curvas) ---
-	var t := 1.0 - exp(-6.0 * delta)
-	modelo.rotation.z = lerpf(modelo.rotation.z, -dir.x * inclinacion + _bank_extra, t)
-	modelo.rotation.x = lerpf(modelo.rotation.x, dir.y * inclinacion * 0.5, t)
-
-	# --- Llamas de los motores (parpadean y crecen con la velocidad) ---
-	var fuerza := 1.0 + velocity.length() * 0.03
-	for llama in llamas:
-		llama.scale.z = fuerza * randf_range(0.8, 1.2)
-
-	# --- Disparo ---
-	_tiempo_disparo -= delta
-	if Input.is_physical_key_pressed(KEY_SPACE) or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		if _tiempo_disparo <= 0.0:
-			_disparar()
-			_tiempo_disparo = cadencia
-
-
-## Avance recto de la pista infinita (modo no-circuito).
-func _movimiento_recto(delta: float, dir: Vector2) -> void:
-	_bank_extra = 0.0
-	var vz := -avance if auto_avanzar else 0.0
-	var objetivo := Vector3(dir.x * velocidad, dir.y * velocidad, vz)
-	velocity = velocity.lerp(objetivo, 1.0 - exp(-suavidad * delta))
-	move_and_slide()
-	position.x = clampf(position.x, -limite_x, limite_x)
-	position.y = clampf(position.y, -limite_y, limite_y)
-	# --- Bucle sin fin: al cruzar la meta vuelve al inicio ---
-	if position.z <= limite_z_min:
-		position.z = limite_z_max
-		vueltas += 1
-		print("¡Vuelta ", vueltas, " completada!")
-	else:
-		position.z = clampf(position.z, limite_z_min, limite_z_max)
-
-
 func _leer_direccion() -> Vector2:
 	var d := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
@@ -268,58 +309,287 @@ func _leer_direccion() -> Vector2:
 		d.y -= 1.0
 	return d.normalized()
 
+func _actualizar_efectos_temporales(delta: float) -> void:
+	# Temporizador de invulnerabilidad
+	if inmune:
+		tiempo_inmune -= delta
+		modelo.visible = int(Time.get_ticks_msec() / 80) % 2 == 0
+		if tiempo_inmune <= 0.0:
+			inmune = false
+			modelo.visible = true
 
-func _disparar() -> void:
-	# Dos lásers PARALELOS hacia donde apunta el MORRO: salen rectos
-	# de los cañones. Necesita laser.gd en la misma carpeta.
+	# Temporizador de escudo (8 s máximo según RF-10)
+	if escudo_activo:
+		tiempo_escudo -= delta
+		var pulso := 2.5 + sin(Time.get_ticks_msec() * 0.008) * 1.0
+		_malla_escudo.scale = Vector3.ONE * (1.0 + sin(Time.get_ticks_msec() * 0.006) * 0.05)
+		if tiempo_escudo <= 0.0:
+			desactivar_escudo()
+
+	# Temporizador de ralentización
+	if _ralentizado_tiempo > 0.0:
+		_ralentizado_tiempo -= delta
+		if _ralentizado_tiempo <= 0.0:
+			_ralentizado_factor = 1.0
+
+	# Temporizador de giro por aceite
+	if _giro_aceite_tiempo > 0.0:
+		_giro_aceite_tiempo -= delta
+		_giro_aceite_acum += delta * TAU * 2.5
+		if _giro_aceite_tiempo <= 0.0:
+			modelo.rotation.y = 0.0
+
+# ---------------------------------------------------------------
+# SISTEMA DE COMODINES (RF-09 a RF-13)
+# ---------------------------------------------------------------
+func recibir_comodin(tipo: int) -> bool:
+	if comodin_almacenado != PowerUpTypes.Type.NONE:
+		return false # Solo se puede almacenar 1 comodín a la vez (RF-09)
+	comodin_almacenado = tipo
+	if tipo == PowerUpTypes.Type.CANON:
+		cargas_canon = 3
+	emit_signal("comodin_cambiado", comodin_almacenado, cargas_canon)
+	return true
+
+func usar_comodin() -> void:
+	if comodin_almacenado == PowerUpTypes.Type.NONE:
+		return
+
+	match comodin_almacenado:
+		PowerUpTypes.Type.ESCUDO:
+			activar_escudo()
+			comodin_almacenado = PowerUpTypes.Type.NONE
+			emit_signal("comodin_cambiado", comodin_almacenado, 0)
+
+		PowerUpTypes.Type.CANON:
+			_disparar_canon_laser()
+			cargas_canon -= 1
+			if cargas_canon <= 0:
+				comodin_almacenado = PowerUpTypes.Type.NONE
+			emit_signal("comodin_cambiado", comodin_almacenado, cargas_canon)
+
+		PowerUpTypes.Type.BOMBA:
+			_activar_bomba_area()
+			comodin_almacenado = PowerUpTypes.Type.NONE
+			emit_signal("comodin_cambiado", comodin_almacenado, 0)
+
+		PowerUpTypes.Type.ACEITE:
+			_colocar_trampa_aceite()
+			comodin_almacenado = PowerUpTypes.Type.NONE
+			emit_signal("comodin_cambiado", comodin_almacenado, 0)
+
+func activar_escudo() -> void:
+	escudo_activo = true
+	tiempo_escudo = 8.0
+	_malla_escudo.visible = true
+
+func desactivar_escudo() -> void:
+	escudo_activo = false
+	tiempo_escudo = 0.0
+	_malla_escudo.visible = false
+
+func _disparar_laser_normal() -> void:
 	var padre := get_parent()
+	if padre == null: return
 	var dir_tiro := -global_transform.basis.z
 	for i in 2:
 		var lado: float = 1.0 if i == 1 else -1.0
 		var laser := Node3D.new()
 		laser.set_script(load("res://laser.gd"))
+		laser.set("tirador", self)
+		laser.set("es_del_jugador", true)
+		laser.set("es_comodin_canon", false)
 		padre.add_child(laser)
 		laser.global_position = to_global(Vector3(lado * 0.6, 0.0, -2.6))
 		laser.global_transform = Transform3D(Basis.looking_at(dir_tiro.normalized()), laser.global_position)
-		_flash(to_global(Vector3(lado * 0.6, 0.0, -2.7)))
+		_flash(to_global(Vector3(lado * 0.6, 0.0, -2.7)), Color(1.0, 0.6, 0.2))
 
+func _disparar_canon_laser() -> void:
+	var padre := get_parent()
+	if padre == null: return
+	var dir_tiro := -global_transform.basis.z
+	# Disparo potente central doble reforzado
+	for i in 2:
+		var lado: float = 0.5 if i == 1 else -0.5
+		var laser := Node3D.new()
+		laser.set_script(load("res://laser.gd"))
+		laser.set("tirador", self)
+		laser.set("es_del_jugador", true)
+		laser.set("es_comodin_canon", true)
+		padre.add_child(laser)
+		laser.global_position = to_global(Vector3(lado, 0.0, -2.8))
+		laser.global_transform = Transform3D(Basis.looking_at(dir_tiro.normalized()), laser.global_position)
+		_flash(to_global(Vector3(lado, 0.0, -3.0)), Color(1.0, 0.2, 0.1))
 
-## Destello en la boca del cañón al disparar (crece y se apaga en 0.09 s).
-func _flash(pos: Vector3) -> void:
+func _activar_bomba_area() -> void:
+	var padre := get_parent()
+	if padre == null: return
+	var bomba := OndaBomba.new()
+	bomba.creador = self
+	bomba.es_jugador = true
+	padre.add_child(bomba)
+	bomba.global_position = global_position
+
+func _colocar_trampa_aceite() -> void:
+	var padre := get_parent()
+	if padre == null: return
+	var trampa := TrampaAceite.new()
+	trampa.creador = self
+	padre.add_child(trampa)
+	trampa.global_position = global_position - global_transform.basis.z * -3.5 + Vector3(0, -altura_circuito + 0.1, 0)
+
+# ---------------------------------------------------------------
+# SISTEMA DE SALUD, DAÑO Y REACCIONES DE COMBATE (RF-14)
+# ---------------------------------------------------------------
+func recibir_dano(cantidad: int, _origen: Vector3 = Vector3.ZERO) -> void:
+	if inmune or vidas <= 0:
+		return
+
+	# Si el escudo está activo, absorbe 100% del daño del primer impacto (RF-10)
+	if escudo_activo:
+		desactivar_escudo()
+		_efecto_absorcion_escudo()
+		return
+
+	vidas = max(0, vidas - cantidad)
+	emit_signal("vidas_cambiadas", vidas, max_vidas)
+
+	if vidas <= 0:
+		_destruir_nave()
+	else:
+		inmune = true
+		tiempo_inmune = tiempo_invulnerabilidad
+
+func recibir_impacto_laser(es_canon: bool, _es_del_jugador: bool) -> void:
+	if escudo_activo:
+		desactivar_escudo()
+		_efecto_absorcion_escudo()
+		return
+	if es_canon:
+		aplicar_ralentizacion(0.40, 2.0)
+	else:
+		aplicar_ralentizacion(0.20, 1.0)
+
+func recibir_impacto_bomba(direccion: Vector3) -> void:
+	if escudo_activo:
+		desactivar_escudo()
+		_efecto_absorcion_escudo()
+		return
+	_empuje_lateral += direccion.x * 12.0
+	aplicar_ralentizacion(0.50, 1.5)
+
+func aplicar_ralentizacion(reduccion: float, duracion: float) -> void:
+	_ralentizado_factor = 1.0 - reduccion
+	_ralentizado_tiempo = duracion
+
+func aplicar_giro_aceite(duracion: float, reduccion: float) -> void:
+	if escudo_activo:
+		desactivar_escudo()
+		_efecto_absorcion_escudo()
+		return
+	_giro_aceite_tiempo = duracion
+	_giro_aceite_acum = 0.0
+	aplicar_ralentizacion(reduccion, duracion)
+
+func _destruir_nave() -> void:
+	control_habilitado = false
+	modelo.visible = false
+	emit_signal("nave_destruida")
+	
+	# Destello de explosión
+	var destello := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 2.0
+	sm.height = 4.0
+	destello.mesh = sm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.1)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.4, 0.1)
+	mat.emission_energy_multiplier = 6.0
+	destello.material_override = mat
+	get_parent().add_child(destello)
+	destello.global_position = global_position
+	
+	var tw := destello.create_tween()
+	tw.tween_property(destello, "scale", Vector3.ONE * 3.0, 0.3)
+	tw.chain().tween_callback(destello.queue_free)
+
+func _efecto_absorcion_escudo() -> void:
+	var onda := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 3.6
+	sm.height = 7.2
+	onda.mesh = sm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.2, 0.9, 1.0, 0.6)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 0.95, 1.0)
+	mat.emission_energy_multiplier = 5.0
+	onda.material_override = mat
+	add_child(onda)
+	
+	var tw := onda.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(onda, "scale", Vector3.ONE * 1.5, 0.25)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.25)
+	tw.chain().tween_callback(onda.queue_free)
+
+# ---------------------------------------------------------------
+# CONSTRUCCIÓN PROCEDURAL DE LA NAVE Y ESCUDO (Sección 19 y 20)
+# ---------------------------------------------------------------
+func _construir_escudo() -> void:
+	_malla_escudo = MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 3.5
+	sm.height = 7.0
+	_malla_escudo.mesh = sm
+	
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.2, 0.8, 1.0, 0.32)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.metallic = 0.5
+	mat.roughness = 0.05
+	mat.emission_enabled = true
+	mat.emission = Color(0.25, 0.85, 1.0)
+	mat.emission_energy_multiplier = 3.2
+	_malla_escudo.material_override = mat
+	_malla_escudo.visible = false
+	add_child(_malla_escudo)
+
+func _flash(pos: Vector3, color: Color) -> void:
 	var chispa := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.35
 	sm.height = 0.7
 	chispa.mesh = sm
 	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(1.0, 0.6, 0.2)
+	m.albedo_color = color
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.emission_enabled = true
-	m.emission = Color(1.0, 0.5, 0.15)
+	m.emission = color
 	m.emission_energy_multiplier = 5.0
 	chispa.material_override = m
-	get_parent().add_child(chispa)
-	chispa.global_position = pos
-	var tw := chispa.create_tween()
-	tw.tween_property(chispa, "scale", Vector3.ONE * 2.2, 0.09)
-	tw.tween_callback(chispa.queue_free)
+	var padre := get_parent()
+	if padre != null:
+		padre.add_child(chispa)
+		chispa.global_position = pos
+		var tw := chispa.create_tween()
+		tw.tween_property(chispa, "scale", Vector3.ONE * 2.2, 0.09)
+		tw.tween_callback(chispa.queue_free)
 
-
-# ---------------------------------------------------------------
-# HITBOX (la zona que "recibe" los golpes)
-# ---------------------------------------------------------------
 func _crear_colision() -> void:
 	var forma := BoxShape3D.new()
-	forma.size = Vector3(2.6, 0.9, 5.6)
+	forma.size = Vector3(2.6, 1.2, 5.6)
 	var col := CollisionShape3D.new()
 	col.shape = forma
 	col.position = Vector3(0.0, 0.0, -0.8)
 	add_child(col)
 
-
-# ---------------------------------------------------------------
-# AYUDANTES PARA CREAR PIEZAS Y MATERIALES
-# ---------------------------------------------------------------
 func _mat(color: Color, metal: float = 0.3, rugosidad: float = 0.5) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
@@ -327,12 +597,10 @@ func _mat(color: Color, metal: float = 0.3, rugosidad: float = 0.5) -> StandardM
 	m.roughness = rugosidad
 	return m
 
-
 func _caja(tam: Vector3) -> BoxMesh:
 	var b := BoxMesh.new()
 	b.size = tam
 	return b
-
 
 func _cilindro(radio_arriba: float, radio_abajo: float, alto: float) -> CylinderMesh:
 	var c := CylinderMesh.new()
@@ -341,7 +609,6 @@ func _cilindro(radio_arriba: float, radio_abajo: float, alto: float) -> Cylinder
 	c.height = alto
 	c.radial_segments = 24
 	return c
-
 
 func _pieza(malla: Mesh, mat: Material, pos: Vector3, rot_grados: Vector3 = Vector3.ZERO, padre: Node = null) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -354,18 +621,12 @@ func _pieza(malla: Mesh, mat: Material, pos: Vector3, rot_grados: Vector3 = Vect
 	padre.add_child(mi)
 	return mi
 
-
-# ---------------------------------------------------------------
-# CONSTRUCCIÓN DE LA NAVE (sigue la lista de componentes de la imagen)
-# La nave apunta hacia -Z (hacia el fondo de la pantalla).
-# ---------------------------------------------------------------
 func _construir_nave() -> void:
-	# ---------- MATERIALES (colores de la imagen) ----------
-	var blanco := _mat(Color(0.86, 0.86, 0.90), 0.35, 0.45)   # cuerpo
-	var rojo := _mat(Color(0.82, 0.08, 0.12), 0.2, 0.5)       # detalles
-	var oscuro := _mat(Color(0.14, 0.15, 0.18), 0.6, 0.4)     # motores y zonas internas
+	var blanco := _mat(Color(0.86, 0.86, 0.90), 0.35, 0.45)
+	var rojo := _mat(Color(0.82, 0.08, 0.12), 0.2, 0.5)
+	var oscuro := _mat(Color(0.14, 0.15, 0.18), 0.6, 0.4)
 
-	var cristal := StandardMaterial3D.new()                   # cabina azul
+	var cristal := StandardMaterial3D.new()
 	cristal.albedo_color = Color(0.10, 0.45, 0.95, 0.55)
 	cristal.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	cristal.metallic = 0.5
@@ -374,14 +635,14 @@ func _construir_nave() -> void:
 	cristal.emission = Color(0.10, 0.40, 1.0)
 	cristal.emission_energy_multiplier = 0.4
 
-	var luz_azul := StandardMaterial3D.new()                  # luces azules brillantes
+	var luz_azul := StandardMaterial3D.new()
 	luz_azul.albedo_color = Color(0.3, 0.7, 1.0)
 	luz_azul.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	luz_azul.emission_enabled = true
 	luz_azul.emission = Color(0.2, 0.55, 1.0)
 	luz_azul.emission_energy_multiplier = 3.0
 
-	var fuego := StandardMaterial3D.new()                     # llama del motor
+	var fuego := StandardMaterial3D.new()
 	fuego.albedo_color = Color(0.35, 0.75, 1.0, 0.65)
 	fuego.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fuego.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -389,55 +650,44 @@ func _construir_nave() -> void:
 	fuego.emission = Color(0.25, 0.6, 1.0)
 	fuego.emission_energy_multiplier = 2.0
 
-	# ---------- 1. CUERPO PRINCIPAL (BoxMesh + PrismMesh para la punta) ----------
+	# 1. Cuerpo principal
 	_pieza(_caja(Vector3(1.4, 0.5, 4.0)), blanco, Vector3(0.0, 0.0, 0.0))
-
-	var punta := PrismMesh.new()                              # nariz en punta
+	var punta := PrismMesh.new()
 	punta.size = Vector3(1.4, 1.8, 0.5)
 	_pieza(punta, blanco, Vector3(0.0, 0.0, -2.9), Vector3(-90.0, 0.0, 0.0))
+	_pieza(_caja(Vector3(0.35, 0.03, 0.7)), rojo, Vector3(0.0, 0.26, -2.4))
+	_pieza(_caja(Vector3(0.6, 0.1, 2.0)), oscuro, Vector3(0.0, -0.27, 0.3))
+	_pieza(_caja(Vector3(0.9, 0.3, 1.2)), blanco, Vector3(0.0, 0.35, 0.9))
 
-	_pieza(_caja(Vector3(0.35, 0.03, 0.7)), rojo, Vector3(0.0, 0.26, -2.4))       # franja roja de la nariz
-	_pieza(_caja(Vector3(0.6, 0.1, 2.0)), oscuro, Vector3(0.0, -0.27, 0.3))       # panel oscuro de abajo
-	_pieza(_caja(Vector3(0.9, 0.3, 1.2)), blanco, Vector3(0.0, 0.35, 0.9))        # joroba trasera
-
-	# ---------- 2. CABINA (BoxMesh azul) ----------
+	# 2. Cabina
 	_pieza(_caja(Vector3(0.8, 0.35, 1.5)), cristal, Vector3(0.0, 0.35, -0.7))
-	_pieza(_caja(Vector3(0.5, 0.12, 0.25)), rojo, Vector3(0.0, 0.28, -1.6))       # cuña roja frente a la cabina
+	_pieza(_caja(Vector3(0.5, 0.12, 0.25)), rojo, Vector3(0.0, 0.28, -1.6))
 
-	# ---------- 3. ALAS (BoxMesh) y 4. ALETAS (BoxMesh) ----------
+	# 3. Alas y aletas
 	for i in 2:
 		var lado: float = 1.0 if i == 1 else -1.0
-		# Ala inclinada hacia atrás
 		var giro := -lado * 25.0
 		var base := Basis(Vector3.UP, deg_to_rad(giro))
 		var centro := Vector3(lado * 2.0, -0.1, 0.9)
 		_pieza(_caja(Vector3(2.8, 0.08, 1.4)), blanco, centro, Vector3(0.0, giro, 0.0))
-		# Franja roja del ala
 		_pieza(_caja(Vector3(2.0, 0.02, 0.15)), rojo, centro + base * Vector3(lado * 0.1, 0.045, 0.0), Vector3(0.0, giro, 0.0))
-		# Punta roja del ala
 		_pieza(_caja(Vector3(0.15, 0.1, 1.2)), rojo, centro + base * Vector3(lado * 1.4, 0.0, 0.0), Vector3(0.0, giro, 0.0))
 
-		# Aleta vertical (inclinada hacia afuera y hacia atrás)
 		var aleta := _pieza(_caja(Vector3(0.08, 1.1, 0.9)), blanco, Vector3(lado * 1.15, 0.75, 1.3), Vector3(20.0, 0.0, -lado * 12.0))
-		_pieza(_caja(Vector3(0.1, 0.25, 0.9)), rojo, Vector3(0.0, 0.5, 0.0), Vector3.ZERO, aleta)  # punta roja
+		_pieza(_caja(Vector3(0.1, 0.25, 0.9)), rojo, Vector3(0.0, 0.5, 0.0), Vector3.ZERO, aleta)
 
-	# ---------- 5. MOTORES (CylinderMesh) y 6. DETALLE DE MOTOR (Cylinder + Torus) ----------
+	# 4. Motores
 	for i in 2:
 		var lado: float = 1.0 if i == 1 else -1.0
 		var x := lado * 1.0
-		# Cuerpo del motor (acostado: el cilindro apunta a lo largo de Z)
 		_pieza(_cilindro(0.36, 0.36, 2.0), blanco, Vector3(x, 0.0, 1.0), Vector3(90.0, 0.0, 0.0))
-		# Entrada de aire oscura al frente
 		_pieza(_cilindro(0.30, 0.30, 0.1), oscuro, Vector3(x, 0.0, -0.02), Vector3(90.0, 0.0, 0.0))
-		# Aro oscuro atrás (TorusMesh)
 		var aro := TorusMesh.new()
 		aro.inner_radius = 0.2
 		aro.outer_radius = 0.38
 		_pieza(aro, oscuro, Vector3(x, 0.0, 2.0), Vector3(90.0, 0.0, 0.0))
-		# Disco azul brillante dentro del aro
 		_pieza(_cilindro(0.22, 0.22, 0.06), luz_azul, Vector3(x, 0.0, 2.0), Vector3(90.0, 0.0, 0.0))
 
-		# Llama (un cono azul que apunta hacia atrás) + luz azul
 		var pivote := Node3D.new()
 		pivote.position = Vector3(x, 0.0, 2.03)
 		modelo.add_child(pivote)
@@ -450,10 +700,10 @@ func _construir_nave() -> void:
 		pivote.add_child(foco)
 		llamas.append(pivote)
 
-	# ---------- 7. DETALLES (BoxMesh / CylinderMesh) ----------
+	# 5. Detalles
 	for i in 2:
 		var lado: float = 1.0 if i == 1 else -1.0
-		_pieza(_caja(Vector3(0.3, 0.08, 0.5)), oscuro, Vector3(lado * 0.35, 0.27, 1.6))    # rejillas de arriba
-		_pieza(_caja(Vector3(0.05, 0.15, 0.6)), oscuro, Vector3(lado * 0.71, 0.0, -0.8))   # tomas de aire laterales
-		_pieza(_cilindro(0.04, 0.04, 0.5), oscuro, Vector3(lado * 0.3, 0.0, -2.4), Vector3(90.0, 0.0, 0.0))  # cañones
-	_pieza(_cilindro(0.03, 0.03, 0.4), oscuro, Vector3(0.0, 0.6, 1.3))                     # antena
+		_pieza(_caja(Vector3(0.3, 0.08, 0.5)), oscuro, Vector3(lado * 0.35, 0.27, 1.6))
+		_pieza(_caja(Vector3(0.05, 0.15, 0.6)), oscuro, Vector3(lado * 0.71, 0.0, -0.8))
+		_pieza(_cilindro(0.04, 0.04, 0.5), oscuro, Vector3(lado * 0.3, 0.0, -2.4), Vector3(90.0, 0.0, 0.0))
+	_pieza(_cilindro(0.03, 0.03, 0.4), oscuro, Vector3(0.0, 0.6, 1.3))

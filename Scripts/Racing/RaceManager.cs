@@ -119,6 +119,7 @@ public partial class RaceManager : Node
 
     private void UpdateRankings()
     {
-        // Lógica opcional para ordenar participantes por progreso (ProgressScore o Laps)
+        if (Participants == null || Participants.Count == 0) return;
+        Participants = Participants.OrderByDescending(p => p.ProgressScore).ToList();
     }
 }
