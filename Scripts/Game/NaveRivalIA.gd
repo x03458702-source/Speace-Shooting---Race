@@ -152,8 +152,8 @@ func _pensar_ia(delta: float) -> void:
 		_evaluar_uso_comodin()
 
 func _evaluar_evasion_obstaculos() -> void:
-	# Muestreo hacia adelante en el circuito
-	var punto_futuro := _s + 35.0
+	# Muestreo hacia adelante en el circuito (distancia de anticipación 35 m,
+	# coherente con el umbral de 28 m usado abajo).
 	var obstaculos := get_tree().get_nodes_in_group("obstaculos")
 	for obs in obstaculos:
 		if is_instance_valid(obs) and obs is Node3D:

@@ -61,9 +61,11 @@ func _crear_colision() -> void:
 	var col := CollisionShape3D.new()
 	var forma := CylinderShape3D.new()
 	forma.radius = 3.0
-	forma.height = 1.0
+	# La trampa vive en el suelo (y≈0.1) pero las naves vuelan a y≈2.6.
+	# Volumen alto para que el Area solape con el CharacterBody de la nave.
+	forma.height = 3.2
 	col.shape = forma
-	col.position.y = 0.5
+	col.position.y = 1.6
 	add_child(col)
 
 func _process(delta: float) -> void:

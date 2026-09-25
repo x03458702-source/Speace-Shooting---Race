@@ -279,7 +279,7 @@ func actualizar_posicion(pos: int, total: int) -> void:
 func actualizar_vuelta(vuelta: int, total: int) -> void:
 	_label_vuelta.text = "VUELTA %d / %d" % [vuelta, total]
 	if vuelta == total:
-		_label_vuelta.text = "¡ÚLTIMA VUELTA!"
+		_label_vuelta.text = "VUELTA %d / %d - ¡ÚLTIMA VUELTA!" % [vuelta, total]
 		_label_vuelta.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
 
 func actualizar_puntos(puntos: int) -> void:

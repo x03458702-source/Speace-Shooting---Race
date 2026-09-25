@@ -89,6 +89,11 @@ func _arrancar_carrera() -> void:
 		if is_instance_valid(c) and c.has_method("set"):
 			c.set("control_habilitado", true)
 	emit_signal("carrera_iniciada")
+	# El texto "¡DESPEGUE!" se quedaba fijo porque _process ya no pasa por
+	# CUENTA_ATRAS. Limpiarlo tras 1 s para no tapar el HUD.
+	if is_inside_tree():
+		var t := get_tree().create_timer(1.0)
+		t.timeout.connect(func(): emit_signal("cuenta_atras_actualizada", ""))
 
 func _actualizar_rankings() -> void:
 	# Ordenar corredores según su progreso continuo total en pista

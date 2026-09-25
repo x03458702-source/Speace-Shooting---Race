@@ -67,6 +67,9 @@ func _crear_colision() -> void:
 	var forma := BoxShape3D.new()
 	forma.size = Vector3(2.5, 2.5, 2.5)
 	col.shape = forma
+	# La caja flota a _altura_base (2.2): la colisión debe estar a la misma
+	# altura que los visuales, si no nunca solapa con la nave (y≈2.6).
+	col.position.y = _altura_base
 	add_child(col)
 
 func _process(delta: float) -> void:

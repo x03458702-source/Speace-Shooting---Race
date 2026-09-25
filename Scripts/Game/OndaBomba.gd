@@ -88,7 +88,10 @@ func _afectar_objeto(obj: Node) -> void:
 
 	# Si es una nave (rival o jugador)
 	if obj.has_method("recibir_impacto_bomba"):
-		var direccion_empuje := (obj.global_position - global_position).normalized()
+		var obj_3d := obj as Node3D
+		if obj_3d == null:
+			return
+		var direccion_empuje: Vector3 = (obj_3d.global_position - global_position).normalized()
 		obj.recibir_impacto_bomba(direccion_empuje)
 		if es_jugador and obj.is_in_group("rivales"):
 			var rm := get_tree().root.find_child("RaceManager", true, false)
