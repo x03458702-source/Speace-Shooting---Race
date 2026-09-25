@@ -5,8 +5,4 @@
 [node name="CharacterBody3D" type="CharacterBody3D" unique_id=37818150]
 script = ExtResource("1_l7t7u")
 
-[node name="nave" type="CharacterBody3D" parent="." unique_id=1160676022]
-visible = false
-script = ExtResource("1_l7t7u")
-
 [node name="MapaEspacial" type="Node3D" parent="." unique_id=1637779752]

@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Escenas/CircuitoOvalado.gd" id="1_oval"]
+[ext_resource type="PackedScene" uid="uid://0w08k0tsasy2" path="res://Nave.tscn" id="2_nave"]
+
+[node name="CircuitoOvalado" type="Node3D"]
+script = ExtResource("1_oval")
+
+[node name="Nave" parent="." instance=ExtResource("2_nave")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 150, 2.6, -700)
+modo_circuito = true
+avance = 28.0

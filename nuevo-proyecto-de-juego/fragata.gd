@@ -122,6 +122,7 @@ func _disparar() -> void:
 		laser.set_script(load("res://laser.gd"))
 		padre.add_child(laser)
 		laser.global_position = to_global(Vector3(lado * 0.75, -0.3, -2.7) * escala)
+		laser.global_rotation = global_rotation
 
 
 # ---------------------------------------------------------------
