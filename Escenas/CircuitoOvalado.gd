@@ -14,6 +14,7 @@ extends Node3D
 @export var num_puertas: int = 8       # puntos de control
 @export var avance_nave: float = 28.0
 @export var altura_nave: float = 2.6
+@export var probabilidad_tanque_morado: float = 0.5 # 50% morado (60%), 50% azul (30%)
 
 var _pts := PackedVector3Array()
 var _anchos := PackedFloat32Array()
@@ -42,6 +43,7 @@ func _ready() -> void:
 	_construir_puertas()
 	_construir_decorado()
 	_construir_cajas_comodines()
+	_construir_tanques_nitro()
 	_construir_obstaculos()
 	_construir_rivales_ia()
 	_configurar_nave()
@@ -83,6 +85,34 @@ func _construir_cajas_comodines() -> void:
 				nodo_cajas.add_child(caja)
 				caja.global_position = centro + right * offset + Vector3(0, 0.2, 0)
 				caja.rotation.y = atan2(-t.x, -t.z)
+
+
+func _construir_tanques_nitro() -> void:
+	var nodo_nitros := Node3D.new()
+	nodo_nitros.name = "TanquesNitro"
+	add_child(nodo_nitros)
+
+	# Alta densidad de tanques de nitro a lo largo del circuito
+	var fracciones_nitro := [0.05, 0.12, 0.20, 0.28, 0.35, 0.42, 0.50, 0.58, 0.65, 0.72, 0.80, 0.88, 0.95]
+	for frac in fracciones_nitro:
+		var dist: float = _total * frac
+		var m := _muestrear(dist)
+		var centro: Vector3 = m[0]
+		var t: Vector3 = m[1]
+		var w := float(m[2])
+		var right := Vector3(-t.z, 0.0, t.x)
+
+		# Colocar a los lados de la pista (izquierda y derecha)
+		for offset in [-14.0, -7.0, 7.0, 14.0]:
+			if abs(offset) < w * 0.46:
+				var tanque := TanqueNitro.new()
+				nodo_nitros.add_child(tanque)
+				tanque.global_position = centro + right * offset + Vector3(0, 0.2, 0)
+				tanque.rotation.y = atan2(-t.x, -t.z)
+				
+				# Aplicar probabilidad de aparición (Azul vs Morado)
+				var es_morado := randf() < probabilidad_tanque_morado
+				tanque.configurar_tipo(es_morado)
 
 
 func _construir_obstaculos() -> void:
@@ -145,7 +175,7 @@ func _construir_rivales_ia() -> void:
 			"primario": Color(0.85, 0.12, 0.15),
 			"secundario": Color(0.95, 0.75, 0.1),
 			"energia": Color(1.0, 0.35, 0.1),
-			"vel": 28.2,
+			"vel": 68.0,
 			"s_offset": -8.0,
 			"lat": 6.0
 		},
@@ -154,7 +184,7 @@ func _construir_rivales_ia() -> void:
 			"primario": Color(0.1, 0.65, 0.25),
 			"secundario": Color(0.15, 0.18, 0.22),
 			"energia": Color(0.2, 0.95, 0.5),
-			"vel": 27.6,
+			"vel": 71.0,
 			"s_offset": -16.0,
 			"lat": -6.0
 		},
@@ -163,7 +193,7 @@ func _construir_rivales_ia() -> void:
 			"primario": Color(0.48, 0.12, 0.75),
 			"secundario": Color(0.8, 0.85, 0.9),
 			"energia": Color(0.75, 0.2, 1.0),
-			"vel": 27.0,
+			"vel": 74.0,
 			"s_offset": -24.0,
 			"lat": 6.0
 		}

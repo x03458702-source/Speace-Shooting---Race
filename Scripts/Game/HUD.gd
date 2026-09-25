@@ -10,6 +10,9 @@ var _label_vuelta: Label
 var _label_puntos: Label
 var _label_velocidad: Label
 
+var _barra_nitro: ProgressBar
+var _label_nitro: Label
+
 var _panel_comodin: PanelContainer
 var _label_comodin_icono: Label
 var _label_comodin_nombre: Label
@@ -39,6 +42,8 @@ func vincular(jugador: Node, manager: Node) -> void:
 			jugador.vidas_cambiadas.connect(actualizar_vidas)
 		if jugador.has_signal("comodin_cambiado"):
 			jugador.comodin_cambiado.connect(actualizar_comodin)
+		if jugador.has_signal("nitro_cambiado"):
+			jugador.nitro_cambiado.connect(actualizar_nitro)
 
 	if manager != null:
 		if manager.has_signal("cuenta_atras_actualizada"):
@@ -126,6 +131,47 @@ func _construir_interfaz() -> void:
 	_label_velocidad.add_theme_font_size_override("font_size", 20)
 	_label_velocidad.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
 	caja_der.add_child(_label_velocidad)
+
+	# -----------------------------------------------------------
+	# PROPULSOR NITRO (Inferior izquierda)
+	# -----------------------------------------------------------
+	var panel_nitro := PanelContainer.new()
+	panel_nitro.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	panel_nitro.offset_left = 30
+	panel_nitro.offset_top = -140
+	panel_nitro.offset_right = 270
+	panel_nitro.offset_bottom = -30
+	control_raiz.add_child(panel_nitro)
+
+	var estilo_nitro := StyleBoxFlat.new()
+	estilo_nitro.bg_color = Color(0.04, 0.06, 0.12, 0.85)
+	estilo_nitro.border_color = Color(0.1, 0.6, 1.0)
+	estilo_nitro.set_border_width_all(3)
+	estilo_nitro.set_corner_radius_all(10)
+	estilo_nitro.set_content_margin_all(10)
+	panel_nitro.add_theme_stylebox_override("panel", estilo_nitro)
+
+	var caja_nitro := VBoxContainer.new()
+	panel_nitro.add_child(caja_nitro)
+
+	_label_nitro = Label.new()
+	_label_nitro.text = "NITRO: 100%"
+	_label_nitro.add_theme_font_size_override("font_size", 16)
+	_label_nitro.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+	caja_nitro.add_child(_label_nitro)
+
+	_barra_nitro = ProgressBar.new()
+	_barra_nitro.max_value = 100.0
+	_barra_nitro.value = 100.0
+	_barra_nitro.custom_minimum_size = Vector2(0, 22)
+	caja_nitro.add_child(_barra_nitro)
+
+	var label_nitro_hint := Label.new()
+	label_nitro_hint.text = "[MAYÚS / BOOST] ACELERAR"
+	label_nitro_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label_nitro_hint.add_theme_font_size_override("font_size", 11)
+	label_nitro_hint.add_theme_color_override("font_color", Color(0.4, 0.6, 0.8))
+	caja_nitro.add_child(label_nitro_hint)
 
 	# -----------------------------------------------------------
 	# 2. CASILLA DE COMODÍN (Inferior derecha)
@@ -260,6 +306,12 @@ func _construir_interfaz() -> void:
 # -----------------------------------------------------------
 # MÉTODOS DE ACTUALIZACIÓN
 # -----------------------------------------------------------
+func actualizar_nitro(actual: float, maximo: float) -> void:
+	if _barra_nitro != null:
+		_barra_nitro.value = (actual / maximo) * 100.0
+	if _label_nitro != null:
+		_label_nitro.text = "NITRO: %d%%" % int((actual / maximo) * 100)
+
 func actualizar_vidas(vidas_actuales: int, max_v: int) -> void:
 	var texto := ""
 	for i in max_v:

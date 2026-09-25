@@ -5,6 +5,7 @@ extends CharacterBody3D
 
 signal vidas_cambiadas(vidas_actuales: int, vidas_max: int)
 signal comodin_cambiado(tipo_comodin: int, cargas: int)
+signal nitro_cambiado(nitro_actual: float, nitro_max: float)
 signal nave_destruida()
 signal vuelta_completada(vuelta: int, total_vueltas: int)
 
@@ -20,7 +21,7 @@ signal vuelta_completada(vuelta: int, total_vueltas: int)
 
 @export_group("Carrera")
 @export var auto_avanzar: bool = true
-@export var avance: float = 28.0
+@export var avance: float = 59.52
 @export var limite_z_min: float = -960.0
 @export var limite_z_max: float = 960.0
 @export var vueltas: int = 0
@@ -54,6 +55,11 @@ var cargas_canon: int = 0
 var escudo_activo: bool = false
 var tiempo_escudo: float = 0.0
 var progreso_total: float = 0.0
+
+@export var nitro_max: float = 100.0
+var nitro_actual: float = 100.0
+@export var consumo_nitro_por_segundo: float = 33.0
+@export var multiplicador_boost: float = 1.4
 
 # Efectos de estado
 var _ralentizado_tiempo: float = 0.0
@@ -125,6 +131,7 @@ func _ready() -> void:
 
 	emit_signal("vidas_cambiadas", vidas, max_vidas)
 	emit_signal("comodin_cambiado", comodin_almacenado, cargas_canon)
+	emit_signal("nitro_cambiado", nitro_actual, nitro_max)
 
 func cargar_circuito(puntos: PackedVector3Array, anchos: PackedFloat32Array) -> void:
 	_pp = puntos
@@ -223,7 +230,14 @@ func _proceso_circuito(delta: float, dir: Vector2) -> void:
 	var w := float(m[2])
 	var giro := t.angle_to(adelante) / PI
 	
-	var v_base := avance * (1.0 - 0.25 * clampf(giro * 2.0, 0.0, 1.0))
+	var boosting := (Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_action_pressed("boost")) and control_habilitado
+	var factor_boost := 1.0
+	if boosting and nitro_actual > 0.0:
+		nitro_actual = maxf(0.0, nitro_actual - consumo_nitro_por_segundo * delta)
+		factor_boost = multiplicador_boost
+		emit_signal("nitro_cambiado", nitro_actual, nitro_max)
+
+	var v_base := avance * (1.0 - 0.25 * clampf(giro * 2.0, 0.0, 1.0)) * factor_boost
 	var v := v_base * _ralentizado_factor if (auto_avanzar and control_habilitado) else 0.0
 	_s += v * delta
 	
@@ -260,7 +274,14 @@ func _proceso_circuito(delta: float, dir: Vector2) -> void:
 
 func _movimiento_recto(delta: float, dir: Vector2) -> void:
 	_bank_extra = 0.0
-	var vz := -avance * _ralentizado_factor if (auto_avanzar and control_habilitado) else 0.0
+	var boosting := (Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_action_pressed("boost")) and control_habilitado
+	var factor_boost := 1.0
+	if boosting and nitro_actual > 0.0:
+		nitro_actual = maxf(0.0, nitro_actual - consumo_nitro_por_segundo * delta)
+		factor_boost = multiplicador_boost
+		emit_signal("nitro_cambiado", nitro_actual, nitro_max)
+
+	var vz := -avance * _ralentizado_factor * factor_boost if (auto_avanzar and control_habilitado) else 0.0
 	var objetivo := Vector3(dir.x * velocidad, dir.y * velocidad, vz)
 	velocity = velocity.lerp(objetivo, 1.0 - exp(-suavidad * delta))
 	move_and_slide()
@@ -338,6 +359,10 @@ func _actualizar_efectos_temporales(delta: float) -> void:
 		_giro_aceite_acum += delta * TAU * 2.5
 		if _giro_aceite_tiempo <= 0.0:
 			modelo.rotation.y = 0.0
+
+func recibir_nitro(cantidad: float) -> void:
+	nitro_actual = clampf(nitro_actual + cantidad, 0.0, nitro_max)
+	emit_signal("nitro_cambiado", nitro_actual, nitro_max)
 
 # ---------------------------------------------------------------
 # SISTEMA DE COMODINES (RF-09 a RF-13)

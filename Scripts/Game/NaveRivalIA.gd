@@ -25,6 +25,11 @@ var vueltas: int = 0
 var progreso_total: float = 0.0
 var control_habilitado: bool = true
 
+@export var nitro_max: float = 100.0
+var nitro_actual: float = 100.0
+@export var consumo_nitro_por_segundo: float = 35.0
+@export var multiplicador_boost: float = 1.6
+
 # Comodines
 var comodin_almacenado: int = PowerUpTypes.Type.NONE
 var cargas_canon: int = 0
@@ -135,21 +140,69 @@ func _physics_process(delta: float) -> void:
 		llama.scale.z = fuerza * randf_range(0.8, 1.2)
 
 func _pensar_ia(delta: float) -> void:
-	# 1. Cambio de carril y evasión periódica
+	# 1. Buscar tanques de nitro y comodines cercanos
+	_buscar_items_cercanos()
+
+	# 2. Evasión de otras naves para adelantamientos limpios
+	_evaluar_evasion_naves()
+
+	# 3. Cambio de carril y evasión periódica
 	_tiempo_cambio_carril -= delta
 	if _tiempo_cambio_carril <= 0.0:
-		_tiempo_cambio_carril = randf_range(1.5, 3.5)
-		# Preferencia de carril con variación aleatoria
+		_tiempo_cambio_carril = randf_range(1.2, 3.0)
 		_lat_objetivo = randf_range(-medio_ancho * 0.65, medio_ancho * 0.65)
 
-	# 2. Detección frontal de obstáculos en la pista (Asteroides y Barreras)
+	# 4. Detección frontal de obstáculos en la pista (Asteroides y Barreras)
 	_evaluar_evasion_obstaculos()
 
-	# 3. Decisión táctica de uso de comodines
+	# 5. Decisión táctica de uso de comodines
 	_tiempo_decision_comodin -= delta
 	if _tiempo_decision_comodin <= 0.0:
-		_tiempo_decision_comodin = randf_range(0.8, 1.8)
+		_tiempo_decision_comodin = randf_range(0.6, 1.5)
 		_evaluar_uso_comodin()
+
+func _evaluar_evasion_naves() -> void:
+	var rivales_y_jugador := get_tree().get_nodes_in_group("jugador") + get_tree().get_nodes_in_group("rivales")
+	for otro in rivales_y_jugador:
+		if otro != self and is_instance_valid(otro) and otro is Node3D:
+			var dist := global_position.distance_to(otro.global_position)
+			if dist < 24.0:
+				var local_pos := to_local(otro.global_position)
+				if local_pos.z < 0: # Delante
+					if local_pos.x >= 0:
+						_lat_objetivo = clampf(_lat - 7.5, -medio_ancho * 0.8, medio_ancho * 0.8)
+					else:
+						_lat_objetivo = clampf(_lat + 7.5, -medio_ancho * 0.8, medio_ancho * 0.8)
+					return
+
+func _buscar_items_cercanos() -> void:
+	var mapa := get_parent().get_parent()
+	if mapa == null:
+		return
+	
+	# Buscar tanques de nitro cercanos
+	var tanques_nitro := mapa.get_node_or_null("TanquesNitro")
+	if tanques_nitro != null:
+		for tanque in tanques_nitro.get_children():
+			if tanque is Area3D and tanque.get("_disponible") == true:
+				var dist := global_position.distance_to(tanque.global_position)
+				if dist < 45.0:
+					var local_pos := to_local(tanque.global_position)
+					if local_pos.z < 0: # Delante
+						_lat_objetivo = clampf(local_pos.x, -medio_ancho * 0.85, medio_ancho * 0.85)
+						return
+
+	# Buscar cajas de comodín cercanas
+	var cajas := mapa.get_node_or_null("CajasComodines")
+	if cajas != null and comodin_almacenado == PowerUpTypes.Type.NONE:
+		for caja in cajas.get_children():
+			if caja is Area3D and caja.get("_disponible") == true:
+				var dist := global_position.distance_to(caja.global_position)
+				if dist < 45.0:
+					var local_pos := to_local(caja.global_position)
+					if local_pos.z < 0: # Delante
+						_lat_objetivo = clampf(local_pos.x, -medio_ancho * 0.85, medio_ancho * 0.85)
+						return
 
 func _evaluar_evasion_obstaculos() -> void:
 	# Muestreo hacia adelante en el circuito (distancia de anticipación 35 m,
@@ -214,7 +267,12 @@ func _proceso_circuito(delta: float) -> void:
 	var w := float(m[2])
 	var giro := t.angle_to(adelante) / PI
 
-	var v_base := avance_base * (1.0 - 0.22 * clampf(giro * 2.0, 0.0, 1.0))
+	var factor_boost := 1.0
+	if nitro_actual > 15.0 and giro < 0.22:
+		nitro_actual = maxf(0.0, nitro_actual - consumo_nitro_por_segundo * delta)
+		factor_boost = multiplicador_boost
+
+	var v_base := avance_base * (1.0 - 0.28 * clampf(giro * 2.0, 0.0, 1.0)) * factor_boost
 	var v := v_base * _ralentizado_factor if control_habilitado else 0.0
 	_s += v * delta
 
@@ -264,6 +322,9 @@ func _actualizar_efectos(delta: float) -> void:
 		_giro_aceite_acum += delta * TAU * 2.5
 		if _giro_aceite_tiempo <= 0.0:
 			modelo.rotation.y = 0.0
+
+func recibir_nitro(cantidad: float) -> void:
+	nitro_actual = clampf(nitro_actual + cantidad, 0.0, nitro_max)
 
 # ---------------------------------------------------------------
 # COMODINES IA
